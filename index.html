@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
+  <title>LocalEats&Stay | Hotels & Restaurants Directory</title>
+  <!-- Tailwind CSS + Font Awesome + Google Fonts -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: #f8fafc; }
+    .card-hover {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 25px -12px rgba(0, 0, 0, 0.1);
+    }
+    .rating-star {
+      color: #facc15;
+    }
+    .gallery-img {
+      transition: opacity 0.2s;
+      object-fit: cover;
+      height: 120px;
+      width: 100%;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    .active-filter {
+      background-color: #1e293b !important;
+      color: white !important;
+      border-color: #1e293b !important;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+<body class="antialiased">
+
+  <div id="app" class="max-w-7xl mx-auto px-4 sm:px-6 py-5 pb-20">
+    <!-- header + admin toggle -->
+    <div class="flex flex-wrap justify-between items-center mb-6 gap-3">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-hotel text-2xl text-indigo-600"></i>
+        <h1 class="text-2xl font-bold text-slate-800">Local<span class="text-indigo-600">Eats&Stay</span></h1>
+      </div>
+      <button id="toggleAdminBtn" class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2 rounded-full text-sm font-medium shadow-md transition flex items-center gap-2">
+        <i class="fas fa-user-shield"></i> <span>Admin Panel</span>
+      </button>
+    </div>
+
+    <!-- DYNAMIC CONTENT RENDERED HERE -->
+    <div id="mainContent"></div>
+  </div>
+
+  <script>
+    // ---------- DATA STRUCTURE ----------
+    let directoryItems = [];     // main array
+    const STORAGE_KEY = "localEatsStay_data";
+
+    // UI state
+    let adminMode = false;       // true = admin panel, false = user mode
+    let userSubMode = "list";    // 'list' or 'detail'
+    let selectedItemId = null;
+    let searchTerm = "";
+    let activeCategory = "all";   // 'all', 'Hotel', 'Restaurant', 'Hostel'
+
+    // DOM elements
+    const mainContainer = document.getElementById("mainContent");
+    const toggleAdminBtn = document.getElementById("toggleAdminBtn");
+
+    // Helper: generate unique ID
+    function generateId() {
+      return Date.now() + '-' + Math.random().toString(36).substr(2, 8);
+    }
+
+    // Default seed data (hotels, restaurants, hostels with gallery, ratings)
+    function getDefaultData() {
+      return [
+        {
+          id: "1", name: "Pearl Continental Lahore", city: "Lahore", category: "Hotel",
+          rating: 4.7, ratingsCount: 342, totalRating: 1607.4,
+          description: "Luxury 5-star hotel with stunning views, pool, and fine dining.",
+          address: "Club Road, GOR 1, Lahore", phone: "+923001234567", whatsapp: "+923001234567",
+          images: ["https://picsum.photos/id/104/400/300", "https://picsum.photos/id/106/400/300", "https://picsum.photos/id/107/400/300"],
+          mapLink: "https://maps.google.com/?q=Pearl+Continental+Lahore"
+        },
+        {
+          id: "2", name: "Kolachi Restaurant", city: "Karachi", category: "Restaurant",
+          rating: 4.9, ratingsCount: 512, totalRating: 2508.8,
+          description: "Famous sea-view BBQ and Pakistani cuisine. Outdoor seating.",
+          address: "Do Darya, Karachi", phone: "+923112223344", whatsapp: "+923112223344",
+          images: ["https://picsum.photos/id/30/400/300", "https://picsum.photos/id/26/400/300", "https://picsum.photos/id/29/400/300"],
+          mapLink: "https://maps.google.com/?q=Kolachi+Restaurant+Karachi"
+        },
+        {
+          id: "3", name: "Backpackers Hub Hostel", city: "Islamabad", category: "Hostel",
+          rating: 4.3, ratingsCount: 89, totalRating: 382.7,
+          description: "Budget friendly, cozy dorms, common kitchen & free wifi.",
+          address: "F-6, Super Market, Islamabad", phone: "+923334455667", whatsapp: "+923334455667",
+          images: ["https://picsum.photos/id/15/400/300", "https://picsum.photos/id/169/400/300", "https://picsum.photos/id/96/400/300"],
+          mapLink: "https://maps.google.com/?q=Backpackers+Hub+Islamabad"
+        },
+        {
+          id: "4", name: "Avari Towers Karachi", city: "Karachi", category: "Hotel",
+          rating: 4.6, ratingsCount: 278, totalRating: 1278.8,
+          description: "5-star business hotel with multiple restaurants and spa.",
+          address: "Fatima Jinnah Road, Karachi", phone: "+923212345678", whatsapp: "+923212345678",
+          images: ["https://picsum.photos/id/111/400/300", "https://picsum.photos/id/112/400/300", "https://picsum.photos/id/114/400/300"],
+          mapLink: "https://maps.google.com/?q=Avari+Towers+Karachi"
+        },
+        {
+          id: "5", name: "Cafe Aylanto", city: "Lahore", category: "Restaurant",
+          rating: 4.8, ratingsCount: 198, totalRating: 950.4,
+          description: "Contemporary Italian & continental cuisine. Elegant ambiance.",
+          address: "MM Alam Road, Lahore", phone: "+923004567890", whatsapp: "+923004567890",
+          images: ["https://picsum.photos/id/127/400/300", "https://picsum.photos/id/131/400/300", "https://picsum.photos/id/124/400/300"],
+          mapLink: "https://maps.google.com/?q=Cafe+Aylanto+Lahore"
+        },
+        {
+          id: "6", name: "Lokal Hostel & Cafe", city: "Lahore", category: "Hostel",
+          rating: 4.4, ratingsCount: 64, totalRating: 281.6,
+          description: "Modern hostel with art vibe, rooftop cafe & events.",
+          address: "Gulberg, Lahore", phone: "+923115554433", whatsapp: "+923115554433",
+          images: ["https://picsum.photos/id/20/400/300", "https://picsum.photos/id/22/400/300", "https://picsum.photos/id/42/400/300"],
+          mapLink: "https://maps.google.com/?q=Lokal+Hostel+Lahore"
+        },
+        {
+          id: "7", name: "The Patio Restaurant", city: "Islamabad", category: "Restaurant",
+          rating: 4.5, ratingsCount: 120, totalRating: 540,
+          description: "Rooftop dining with panoramic views, fusion food.",
+          address: "F-7 Markaz, Islamabad", phone: "+923316665544", whatsapp: "+923316665544",
+          images: ["https://picsum.photos/id/40/400/300", "https://picsum.photos/id/38/400/300", "https://picsum.photos/id/36/400/300"],
+          mapLink: "https://maps.google.com/?q=The+Patio+Islamabad"
+        }
+      ];
+    }
+
+    // load / init data
+    function loadData() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        directoryItems = JSON.parse(stored);
+      } else {
+        directoryItems = getDefaultData();
+        saveToLocal();
+      }
+    }
+
+    function saveToLocal() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(directoryItems));
+    }
+
+    // helper: update rating average (recalc from totalRating/ratingsCount)
+    function updateItemRating(item, newUserRating) {
+      // new rating submitted by user
+      let oldCount = item.ratingsCount || 0;
+      let oldTotal = item.totalRating || 0;
+      const newCount = oldCount + 1;
+      const newTotal = oldTotal + newUserRating;
+      const newAvg = newTotal / newCount;
+      item.ratingsCount = newCount;
+      item.totalRating = newTotal;
+      item.rating = parseFloat(newAvg.toFixed(2));
+      saveToLocal();
+      return item;
+    }
+
+    // CRUD admin functions
+    function addItem(newItem) {
+      const item = {
+        ...newItem,
+        id: generateId(),
+        ratingsCount: newItem.ratingsCount || 0,
+        totalRating: newItem.totalRating || 0,
+        rating: newItem.rating || 0
+      };
+      if (!item.images || item.images.length === 0) item.images = ["https://picsum.photos/id/1/400/300"];
+      directoryItems.push(item);
+      saveToLocal();
+      render();
+    }
+
+    function updateItem(updated) {
+      const index = directoryItems.findIndex(i => i.id === updated.id);
+      if (index !== -1) {
+        // preserve rating stats if not overwritten
+        const old = directoryItems[index];
+        directoryItems[index] = {
+          ...updated,
+          ratingsCount: updated.ratingsCount ?? old.ratingsCount,
+          totalRating: updated.totalRating ?? old.totalRating,
+          rating: updated.rating ?? old.rating
+        };
+        saveToLocal();
+        render();
+      }
+    }
+
+    function deleteItem(id) {
+      if (confirm("Delete this listing permanently?")) {
+        directoryItems = directoryItems.filter(i => i.id !== id);
+        if (selectedItemId === id) {
+          userSubMode = "list";
+          selectedItemId = null;
+        }
+        saveToLocal();
+        render();
+      }
+    }
+
+    // Filter logic based on searchTerm & activeCategory
+    function getFilteredItems() {
+      let filtered = [...directoryItems];
+      if (searchTerm.trim() !== "") {
+        const term = searchTerm.trim().toLowerCase();
+        filtered = filtered.filter(item => 
+          item.name.toLowerCase().includes(term) || 
+          item.city.toLowerCase().includes(term)
+        );
+      }
+      if (activeCategory !== "all") {
+        filtered = filtered.filter(item => item.category === activeCategory);
+      }
+      return filtered;
+    }
+
+    // ----- RENDER FUNCTIONS -----
+    function render() {
+      if (adminMode) {
+        renderAdminPanel();
+      } else {
+        if (userSubMode === "detail" && selectedItemId) {
+          const item = directoryItems.find(i => i.id === selectedItemId);
+          if (item) renderDetailView(item);
+          else {
+            userSubMode = "list";
+            renderUserListView();
+          }
+        } else {
+          renderUserListView();
+        }
+      }
+    }
+
+    // USER LIST VIEW (cards + filters)
+    function renderUserListView() {
+      const filtered = getFilteredItems();
+      const filterButtons = `
+        <div class="flex flex-wrap gap-2 mb-6">
+          <button data-cat="all" class="cat-filter-btn px-5 py-2 rounded-full text-sm font-medium border ${activeCategory === 'all' ? 'active-filter bg-slate-800 text-white border-slate-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'} transition">All</button>
+          <button data-cat="Hotel" class="cat-filter-btn px-5 py-2 rounded-full text-sm font-medium border ${activeCategory === 'Hotel' ? 'active-filter bg-slate-800 text-white border-slate-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'} transition"><i class="fas fa-building mr-1"></i> Hotels</button>
+          <button data-cat="Restaurant" class="cat-filter-btn px-5 py-2 rounded-full text-sm font-medium border ${activeCategory === 'Restaurant' ? 'active-filter bg-slate-800 text-white border-slate-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'} transition"><i class="fas fa-utensils mr-1"></i> Restaurants</button>
+          <button data-cat="Hostel" class="cat-filter-btn px-5 py-2 rounded-full text-sm font-medium border ${activeCategory === 'Hostel' ? 'active-filter bg-slate-800 text-white border-slate-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'} transition"><i class="fas fa-bed mr-1"></i> Hostels</button>
+        </div>
+      `;
+
+      const searchBar = `
+        <div class="relative mb-6">
+          <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input type="text" id="searchInput" placeholder="Search by city or name (Lahore, Karachi, hotel...)" class="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 shadow-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none transition bg-white" value="${searchTerm.replace(/"/g, '&quot;')}">
+        </div>
+      `;
+
+      let cardsHtml = "";
+      if (filtered.length === 0) {
+        cardsHtml = `<div class="text-center py-12 bg-white rounded-2xl shadow"><i class="fas fa-map-marked-alt text-5xl text-gray-300 mb-3"></i><p class="text-gray-500">No places found. Try different search or add via admin.</p></div>`;
+      } else {
+        cardsHtml = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">` + 
+          filtered.map(item => {
+            const firstImg = item.images && item.images[0] ? item.images[0] : "https://picsum.photos/id/1/400/200";
+            const stars = renderStars(item.rating);
+            return `
+              <div data-id="${item.id}" class="card-item bg-white rounded-2xl overflow-hidden shadow-md card-hover cursor-pointer transition-all border border-gray-100">
+                <img src="${firstImg}" alt="${item.name}" class="w-full h-48 object-cover">
+                <div class="p-4">
+                  <div class="flex justify-between items-start">
+                    <h3 class="font-bold text-lg text-slate-800">${escapeHtml(item.name)}</h3>
+                    <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full font-medium">${item.category}</span>
+                  </div>
+                  <p class="text-gray-500 text-sm mt-1"><i class="fas fa-map-marker-alt mr-1"></i> ${escapeHtml(item.city)}</p>
+                  <div class="flex items-center mt-2 gap-1">${stars} <span class="text-sm text-gray-600 ml-1">(${item.rating ?? 0})</span></div>
+                </div>
+              </div>
+            `;
+          }).join('') + `</div>`;
+      }
+
+      const html = `
+        <div>
+          <div class="bg-white p-4 rounded-2xl shadow-sm mb-6">
+            ${searchBar}
+            ${filterButtons}
+            <div class="text-sm text-gray-500 mt-2">📌 ${filtered.length} place${filtered.length !== 1 ? 's' : ''} found</div>
+          </div>
+          ${cardsHtml}
+        </div>
+      `;
+
+      mainContainer.innerHTML = html;
+      // attach events
+      document.getElementById("searchInput")?.addEventListener("input", (e) => {
+        searchTerm = e.target.value;
+        renderUserListView();
+      });
+      document.querySelectorAll(".cat-filter-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          activeCategory = btn.getAttribute("data-cat");
+          renderUserListView();
+        });
+      });
+      document.querySelectorAll(".card-item").forEach(card => {
+        card.addEventListener("click", (e) => {
+          const id = card.getAttribute("data-id");
+          if (id) {
+            selectedItemId = id;
+            userSubMode = "detail";
+            render();
+          }
+        });
+      });
+    }
+
+    // DETAIL VIEW with rating, gallery, whatsapp, map
+    function renderDetailView(item) {
+      const starsDisplay = renderStars(item.rating);
+      const galleryHtml = item.images && item.images.length ? `
+        <div class="flex gap-3 overflow-x-auto pb-3 scrollbar-hide">
+          ${item.images.map(img => `<img src="${img}" class="w-32 h-32 rounded-xl object-cover shadow-sm flex-shrink-0" />`).join('')}
+        </div>
+      ` : `<div class="text-gray-400 text-sm">No gallery images</div>`;
+
+      const ratingWidget = `
+        <div class="mt-4 pt-4 border-t border-gray-200">
+          <p class="font-semibold text-gray-700 mb-2">⭐ Rate this place:</p>
+          <div class="flex gap-2 text-2xl" id="starRatingWidget">
+            ${[1,2,3,4,5].map(star => `<i data-score="${star}" class="far fa-star cursor-pointer hover:scale-110 transition text-yellow-500 text-2xl"></i>`).join('')}
+          </div>
+          <p class="text-xs text-gray-400 mt-1">Click a star to add your rating (affects average)</p>
+        </div>
+      `;
+
+      const html = `
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+          <button id="backToListBtn" class="m-4 inline-flex items-center gap-2 text-indigo-600 font-medium bg-indigo-50 px-4 py-2 rounded-full hover:bg-indigo-100 transition"><i class="fas fa-arrow-left"></i> Back to results</button>
+          <div class="p-5 pt-0">
+            <div class="flex flex-wrap justify-between items-start gap-2 border-b pb-4 mb-4">
+              <div>
+                <h2 class="text-2xl font-bold text-slate-800">${escapeHtml(item.name)}</h2>
+                <div class="flex items-center gap-2 mt-1 text-gray-500"><i class="fas fa-map-pin"></i> ${escapeHtml(item.city)} | ${item.category}</div>
+              </div>
+              <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">★ ${item.rating ?? 0}</span>
+            </div>
+            <div class="mb-5">${galleryHtml}</div>
+            <div class="grid md:grid-cols-2 gap-6">
+              <div>
+                <p class="text-gray-700 leading-relaxed mb-4"><span class="font-semibold">📝 Description:</span> ${escapeHtml(item.description)}</p>
+                <p class="mb-2"><i class="fas fa-location-dot w-6 text-indigo-500"></i> <span class="font-medium">Address:</span> ${escapeHtml(item.address)}</p>
+                <p class="mb-2"><i class="fas fa-phone-alt w-6 text-indigo-500"></i> <span class="font-medium">Phone:</span> <a href="tel:${item.phone}" class="text-indigo-600">${item.phone}</a></p>
+                <div class="flex flex-wrap gap-3 mt-4">
+                  <a href="https://wa.me/${item.whatsapp?.replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-full flex items-center gap-2 text-sm"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+                  <a href="tel:${item.phone}" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-full flex items-center gap-2 text-sm"><i class="fas fa-phone"></i> Call</a>
+                  <a href="${item.mapLink || `https://maps.google.com/?q=${encodeURIComponent(item.address)}`}" target="_blank" class="bg-gray-700 hover:bg-gray-800 text-white px-5 py-2 rounded-full flex items-center gap-2 text-sm"><i class="fas fa-map-marked-alt"></i> Google Maps</a>
+                </div>
+              </div>
+              <div>
+                <div class="bg-gray-50 p-4 rounded-xl">
+                  <div class="flex items-center gap-2 mb-2"><i class="fas fa-star text-yellow-500"></i> <span class="font-bold">Rating: ${item.rating} (${item.ratingsCount ?? 0} reviews)</span></div>
+                  <div class="flex text-xl">${starsDisplay}</div>
+                  ${ratingWidget}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      mainContainer.innerHTML = html;
+      document.getElementById("backToListBtn")?.addEventListener("click", () => {
+        userSubMode = "list";
+        selectedItemId = null;
+        render();
+      });
+      // star rating listener
+      const starsContainer = document.getElementById("starRatingWidget");
+      if (starsContainer) {
+        starsContainer.querySelectorAll("i").forEach(starIcon => {
+          starIcon.addEventListener("click", (e) => {
+            const score = parseInt(starIcon.getAttribute("data-score"));
+            if (!isNaN(score)) {
+              const idx = directoryItems.findIndex(i => i.id === item.id);
+              if (idx !== -1) {
+                updateItemRating(directoryItems[idx], score);
+                const updatedItem = directoryItems[idx];
+                renderDetailView(updatedItem);
+              }
+            }
+          });
+        });
+      }
+    }
+
+    // ---------- ADMIN PANEL (CRUD + add/edit) ----------
+    let editingAdminId = null;
+    function renderAdminPanel() {
+      const itemsList = directoryItems;
+      const adminFormHtml = `
+        <div class="bg-white rounded-2xl shadow p-5 mb-8">
+          <h3 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="fas fa-plus-circle text-indigo-600"></i> ${editingAdminId ? 'Edit Listing' : 'Add New Place'}</h3>
+          <form id="adminForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="text" id="adminName" placeholder="Name*" class="border p-2 rounded-xl" required>
+            <input type="text" id="adminCity" placeholder="City*" class="border p-2 rounded-xl" required>
+            <select id="adminCategory" class="border p-2 rounded-xl">
+              <option value="Hotel">Hotel</option><option value="Restaurant">Restaurant</option><option value="Hostel">Hostel</option>
+            </select>
+            <input type="text" id="adminRating" placeholder="Rating (optional, e.g 4.5)" step="0.1" class="border p-2 rounded-xl">
+            <input type="text" id="adminPhone" placeholder="Phone" class="border p-2 rounded-xl">
+            <input type="text" id="adminWhatsapp" placeholder="WhatsApp (same as phone)" class="border p-2 rounded-xl">
+            <textarea id="adminDesc" placeholder="Description" rows="2" class="border p-2 rounded-xl md:col-span-2"></textarea>
+            <input type="text" id="adminAddress" placeholder="Address" class="border p-2 rounded-xl md:col-span-2">
+            <input type="text" id="adminImages" placeholder="Image URLs (comma separated, at least 1)" class="border p-2 rounded-xl md:col-span-2">
+            <div class="md:col-span-2 flex gap-3">
+              <button type="submit" class="bg-indigo-600 text-white px-5 py-2 rounded-xl hover:bg-indigo-700">${editingAdminId ? 'Update' : 'Add'} Place</button>
+              <button type="button" id="cancelAdminEdit" class="bg-gray-300 text-gray-800 px-5 py-2 rounded-xl hover:bg-gray-400">Cancel Edit</button>
+            </div>
+          </form>
+        </div>
+      `;
+
+      const listingsHtml = `
+        <h3 class="text-xl font-bold mb-3">📍 All Listings (${itemsList.length})</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${itemsList.map(item => `
+            <div class="bg-white rounded-xl shadow p-4 flex justify-between items-start">
+              <div>
+                <h4 class="font-bold">${escapeHtml(item.name)}</h4>
+                <p class="text-sm text-gray-500">${item.city} • ${item.category} ★ ${item.rating || 'new'}</p>
+              </div>
+              <div class="flex gap-2">
+                <button data-edit='${item.id}' class="editAdminBtn bg-amber-500 text-white p-2 rounded-full w-8 h-8 flex items-center justify-center"><i class="fas fa-edit text-sm"></i></button>
+                <button data-del='${item.id}' class="delAdminBtn bg-red-500 text-white p-2 rounded-full w-8 h-8 flex items-center justify-center"><i class="fas fa-trash-alt text-sm"></i></button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      mainContainer.innerHTML = `
+        <div class="mb-4 flex justify-between items-center">
+          <h2 class="text-2xl font-bold text-slate-800"><i class="fas fa-cog"></i> Admin Dashboard</h2>
+          <button id="exitAdminBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-full text-sm"><i class="fas fa-arrow-left"></i> Exit Admin</button>
+        </div>
+        ${adminFormHtml}
+        ${listingsHtml}
+      `;
+
+      // Exit admin
+      document.getElementById("exitAdminBtn")?.addEventListener("click", () => {
+        adminMode = false;
+        userSubMode = "list";
+        selectedItemId = null;
+        editingAdminId = null;
+        render();
+      });
+      // form submission
+      const adminForm = document.getElementById("adminForm");
+      adminForm?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const name = document.getElementById("adminName").value.trim();
+        const city = document.getElementById("adminCity").value.trim();
+        const category = document.getElementById("adminCategory").value;
+        const ratingVal = parseFloat(document.getElementById("adminRating").value);
+        const phone = document.getElementById("adminPhone").value.trim();
+        const whatsapp = document.getElementById("adminWhatsapp").value.trim() || phone;
+        const description = document.getElementById("adminDesc").value.trim();
+        const address = document.getElementById("adminAddress").value.trim();
+        let imagesRaw = document.getElementById("adminImages").value.trim();
+        let imagesArr = imagesRaw ? imagesRaw.split(",").map(s => s.trim()).filter(s => s) : ["https://picsum.photos/id/1/400/300"];
+        if (imagesArr.length === 0) imagesArr = ["https://picsum.photos/id/1/400/300"];
+        const newItem = {
+          name, city, category, phone, whatsapp, description, address,
+          images: imagesArr,
+          rating: isNaN(ratingVal) ? 0 : ratingVal,
+          ratingsCount: 0, totalRating: 0,
+          mapLink: `https://maps.google.com/?q=${encodeURIComponent(address)}`
+        };
+        if (editingAdminId) {
+          const existing = directoryItems.find(i => i.id === editingAdminId);
+          if (existing) {
+            const updated = { ...existing, ...newItem, id: editingAdminId };
+            updateItem(updated);
+          }
+          editingAdminId = null;
+        } else {
+          addItem(newItem);
+        }
+        renderAdminPanel();
+      });
+
+      document.getElementById("cancelAdminEdit")?.addEventListener("click", () => {
+        editingAdminId = null;
+        renderAdminPanel();
+      });
+
+      document.querySelectorAll(".editAdminBtn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = btn.getAttribute("data-edit");
+          const item = directoryItems.find(i => i.id === id);
+          if (item) {
+            editingAdminId = id;
+            document.getElementById("adminName").value = item.name;
+            document.getElementById("adminCity").value = item.city;
+            document.getElementById("adminCategory").value = item.category;
+            document.getElementById("adminRating").value = item.rating;
+            document.getElementById("adminPhone").value = item.phone || "";
+            document.getElementById("adminWhatsapp").value = item.whatsapp || "";
+            document.getElementById("adminDesc").value = item.description || "";
+            document.getElementById("adminAddress").value = item.address || "";
+            document.getElementById("adminImages").value = item.images ? item.images.join(", ") : "";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        });
+      });
+      document.querySelectorAll(".delAdminBtn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = btn.getAttribute("data-del");
+          deleteItem(id);
+        });
+      });
+    }
+
+    // Helper: stars
+    function renderStars(rating) {
+      const fullStars = Math.floor(rating);
+      const hasHalf = (rating % 1) >= 0.5;
+      let starsHtml = "";
+      for (let i = 0; i < fullStars; i++) starsHtml += `<i class="fas fa-star rating-star"></i>`;
+      if (hasHalf) starsHtml += `<i class="fas fa-star-half-alt rating-star"></i>`;
+      let empty = 5 - fullStars - (hasHalf ? 1 : 0);
+      for (let i = 0; i < empty; i++) starsHtml += `<i class="far fa-star rating-star"></i>`;
+      return starsHtml;
+    }
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+    // toggle admin mode
+    toggleAdminBtn.addEventListener("click", () => {
+      adminMode = !adminMode;
+      if (adminMode) {
+        userSubMode = "list";
+        selectedItemId = null;
+        editingAdminId = null;
+      } else {
+        userSubMode = "list";
+        selectedItemId = null;
+      }
+      render();
+    });
+
+    // initialize
+    loadData();
+    render();
+  </script>
+</body>
+</html>
